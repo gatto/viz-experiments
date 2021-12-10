@@ -75,7 +75,7 @@ MY_TYPES = [
     "weather",
     "weather",
 ]
-BASE_VAL = 400
+BASE_VAL = 256.32
 
 st.title("Bike Sharing: Visualization of Instances")
 
