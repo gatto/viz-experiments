@@ -2,9 +2,10 @@ import pandas as pd
 import streamlit as st
 from gsheetsdb import connect
 
-SELECT_FILTERS = ["Name", "Genre"]
-BOOL_FILTERS = ["Loved", "OneShottable", "Campaignable", "Physical"]
-RADIO_FILTERS = ["Masterless", "Language"]
+SELECT_FILTERS = ("Name",)
+MULTIPLE_FILTERS = ("Genre",)
+BOOL_FILTERS = ("Loved", "OneShottable", "Campaignable", "Physical")
+RADIO_FILTERS = ("Masterless", "Language")
 SHEET_URL = st.secrets["public_gsheets_url"] + "#gid=0"
 Q_ALL_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Language, Expansions FROM "{SHEET_URL}"'
 Q_SOME_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Language, Expansions, ManualIn, MaterialsIn, ExpansionIn FROM "{SHEET_URL}"'
@@ -22,9 +23,9 @@ def query(my_query):
 all_games = pd.DataFrame(
     query(f'SELECT Name, Genre, Masterless, Language FROM "{SHEET_URL}"')
 )
-## get unique options for "SELECT_FILTERS" and RADIO_FILTERS columns (for other columns, I provide options myself)
+## get unique options for SELECT_FILTERS, MULTIPLE_FILTERS and RADIO_FILTERS columns (for other columns, I provide options myself)
 cols = {}
-for column in SELECT_FILTERS + RADIO_FILTERS:
+for column in SELECT_FILTERS + MULTIPLE_FILTERS + RADIO_FILTERS:
     cols[column] = pd.Series(("all")).append(
         all_games[column].drop_duplicates().dropna().sort_values(), ignore_index=True
     )
@@ -33,6 +34,9 @@ filters = {}
 st.sidebar.subheader("Refine your search")
 for key in SELECT_FILTERS:
     filters[key] = st.sidebar.selectbox(f"Filter by {key}…", cols[key])
+for key in MULTIPLE_FILTERS:
+    if key == "Genre":
+        filters[key] = st.sidebar.multiselect(f"Filter by {key}…", cols[key][1:])
 num_players = st.sidebar.select_slider(
     "Filter by Number of Players…", options=["all", 1, 2, 3, 4, 5, 6, 7, 8]
 )
@@ -61,6 +65,8 @@ for key in RADIO_FILTERS:
     elif key == "Language":
         filters[key] = st.sidebar.radio(f"Filter by {key}…", cols[key])
 
+# condition  # this is fantastic to debug query problems
+
 # composing the query
 condition = ""
 filtering_on_cols = []
@@ -68,6 +74,13 @@ for key, filter in filters.items():
     if key in SELECT_FILTERS and filter != "all":
         condition = f"{condition} and {key} = '{filter}'"
         filtering_on_cols.append(key)
+    elif key == "Genre" and filter:
+        working_cond = ""
+        for genre in filter:
+            working_cond = f"{working_cond} or {key} = '{genre}'"
+        condition = f"{condition} and ({working_cond[4:]})"
+        if len(filter) == 1:
+            filtering_on_cols.append(key)
     elif key in RADIO_FILTERS and filter != "all":
         if key == "Masterless":
             condition = f"{condition} and {key} = {filter}"
