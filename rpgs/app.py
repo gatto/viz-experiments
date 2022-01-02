@@ -2,25 +2,15 @@ import pandas as pd
 import streamlit as st
 from gsheetsdb import connect
 
-SELECT_FILTERS = [
-    "Name",
-    "Genre",
-]
-BOOL_FILTERS = [
-    "Loved",
-    "OneShottable",
-    "Campaignable",
-    "Physical",
-]
-RADIO_FILTERS = [
-    "Masterless",
-]
+SELECT_FILTERS = ["Name", "Genre"]
+BOOL_FILTERS = ["Loved", "OneShottable", "Campaignable", "Physical"]
+RADIO_FILTERS = ["Masterless", "Language"]
 SHEET_URL = st.secrets["public_gsheets_url"] + "#gid=0"
-Q_ALL_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Expansions FROM "{SHEET_URL}"'
-Q_SOME_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Expansions, ManualIn, MaterialsIn, ExpansionIn FROM "{SHEET_URL}"'
+Q_ALL_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Language, Expansions FROM "{SHEET_URL}"'
+Q_SOME_GAMES = f'SELECT Name, Genre, Loved, Format, PlayersMin, PlayersMax, OneShottable, Campaignable, Masterless, Language, Expansions, ManualIn, MaterialsIn, ExpansionIn FROM "{SHEET_URL}"'
+st.set_page_config(page_title="RPGs Picker", page_icon="🎲", layout="centered")
+st.title("🎲 Role Play Games Picker")
 conn = connect()
-st.set_page_config(page_title="RPGs Picker", page_icon="🐞", layout="centered")
-st.title("🐞 Role Play Games Picker")
 
 
 @st.cache(ttl=600)
@@ -28,14 +18,17 @@ def query(my_query):
     return conn.execute(my_query, headers=1)
 
 
-all_games = pd.DataFrame(query(f'SELECT * FROM "{SHEET_URL}"'))
+# compose the filtering interface
+all_games = pd.DataFrame(
+    query(f'SELECT Name, Genre, Masterless, Language FROM "{SHEET_URL}"')
+)
+## get unique options for "SELECT_FILTERS" and RADIO_FILTERS columns (for other columns, I provide options myself)
 cols = {}
-for column in SELECT_FILTERS:
-    cols[column] = (
-        pd.Series(("all"))
-        .append(all_games[column].sort_values(), ignore_index=True)
-        .drop_duplicates()
+for column in SELECT_FILTERS + RADIO_FILTERS:
+    cols[column] = pd.Series(("all")).append(
+        all_games[column].drop_duplicates().dropna().sort_values(), ignore_index=True
     )
+## UI input widgets for all filters
 filters = {}
 st.sidebar.subheader("Refine your search")
 for key in SELECT_FILTERS:
@@ -44,7 +37,19 @@ num_players = st.sidebar.select_slider(
     "Filter by Number of Players…", options=["all", 1, 2, 3, 4, 5, 6, 7, 8]
 )
 for key in BOOL_FILTERS:
-    if key == "Physical":
+    if key == "Loved":
+        filters[key] = st.sidebar.checkbox(
+            f"Filter by {key}…", help="Personal favourites."
+        )
+    elif key == "OneShottable":
+        filters[key] = st.sidebar.checkbox(
+            f"Filter by {key}…", help="Ok to be played only once."
+        )
+    elif key == "Campaignable":
+        filters[key] = st.sidebar.checkbox(
+            f"Filter by {key}…", help="Ok to be played in multiple sessions."
+        )
+    elif key == "Physical":
         filters[key] = st.sidebar.checkbox(
             f"Filter by {key}…", help="If I have the physical book."
         )
@@ -53,6 +58,8 @@ for key in BOOL_FILTERS:
 for key in RADIO_FILTERS:
     if key == "Masterless":
         filters[key] = st.sidebar.radio(f"Filter by {key}…", ("all", True, False))
+    elif key == "Language":
+        filters[key] = st.sidebar.radio(f"Filter by {key}…", cols[key])
 
 # composing the query
 condition = ""
@@ -64,10 +71,13 @@ for key, filter in filters.items():
     elif key in RADIO_FILTERS and filter != "all":
         if key == "Masterless":
             condition = f"{condition} and {key} = {filter}"
+        elif key == "Language":
+            condition = f"{condition} and {key} = '{filter}'"
         filtering_on_cols.append(key)
     elif key in BOOL_FILTERS and filter:
         condition = f"{condition} and {key} = {filter}"
-        filtering_on_cols.append(key)
+        if key != "Physical":
+            filtering_on_cols.append(key)
 if num_players != "all":
     condition = (
         f"{condition} and PlayersMin <= {num_players} and PlayersMax >= {num_players}"
@@ -83,9 +93,11 @@ if condition:
         results = results.astype("str").iloc[0]
         results = results.rename(results[0])
         results[1:]
+        st.caption(f"1 game.")
     else:  # I got more than one game
-        # results = results.drop(columns=filtering_on_cols)
-        st.dataframe(results)
+        if len(results) > 1:
+            results = results.drop(columns=filtering_on_cols)
+            st.dataframe(results)
         st.caption(f"{len(results)} games.")
 else:  # I have not filtered anything
     st.subheader("All my library")
