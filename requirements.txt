@@ -2,3 +2,4 @@ altair
 pandas
 streamlit
 gsheetsdb
+psycopg2-binary
