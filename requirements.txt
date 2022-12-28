@@ -3,3 +3,4 @@ pandas
 streamlit
 gsheetsdb
 psycopg2-binary
+pyparsing
