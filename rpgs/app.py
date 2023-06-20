@@ -26,7 +26,7 @@ all_games = pd.DataFrame(
 ## get unique options for SELECT_FILTERS, MULTIPLE_FILTERS and RADIO_FILTERS columns (for other columns, I provide options myself)
 cols = {}
 for column in SELECT_FILTERS + MULTIPLE_FILTERS + RADIO_FILTERS:
-    cols[column] = pd.concat((Series(("all")),
+    cols[column] = pd.concat((pd.Series(("all")),
         all_games[column].drop_duplicates().dropna().sort_values()), ignore_index=True
     )
 ## UI input widgets for all filters
